@@ -64,8 +64,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": [
-        "^src/Kind\\.NET/Kind\\.NET\\.csproj$"
+      "managerFilePatterns": [
+        "/^src/Kind\\.NET/Kind\\.NET\\.csproj$/"
       ],
       "matchStrings": [
         "<KindVersion>\\s*(?<currentValue>v?\\d+\\.\\d+\\.\\d+)\\s*</KindVersion>"
