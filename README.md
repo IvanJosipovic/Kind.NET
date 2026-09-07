@@ -11,6 +11,18 @@ package bundles the pinned Kind executable for Windows, Linux, and macOS on
 x64 and ARM64. A supported container provider (Docker, Podman, or nerdctl) is
 still required to create clusters.
 
+The package contains the RID-specific Kind executable as a standard NuGet native
+asset. Publish the application for its target runtime, for example:
+
+```sh
+dotnet publish -r linux-x64
+```
+
+The published application includes the matching `kind` executable beside the
+application files. Single-file publishing is not supported for the bundled
+executable; use normal folder publishing or provide an explicit
+`KindClientOptions.ExecutablePath`.
+
 ```csharp
 using Kind.NET;
 
