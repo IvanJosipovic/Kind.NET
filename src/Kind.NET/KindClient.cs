@@ -17,7 +17,9 @@ public sealed class KindClient
     public KindClient(KindClientOptions? options = null)
     {
         _options = options ?? new KindClientOptions();
-        _executable = KindExecutableResolver.Resolve(_options, KindPlatform.Current);
+        _executable = !string.IsNullOrWhiteSpace(_options.ExecutablePath)
+            ? _options.ExecutablePath!
+            : KindExecutableResolver.Resolve(_options, KindPlatform.Current);
     }
 
     internal KindClient(KindClientOptions options, Func<IReadOnlyList<string>, CancellationToken, Task<KindCommandResult>> executor)

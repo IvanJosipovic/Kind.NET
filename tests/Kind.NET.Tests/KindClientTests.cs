@@ -1,8 +1,19 @@
 namespace Kind.NET.Tests;
 
+using System.Runtime.InteropServices;
+
 public sealed class KindClientTests
 {
     private static string[] Args(params string[] values) => values;
+    private static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+    private static string ShellPath => IsWindows
+        ? Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe"
+        : "/bin/sh";
+
+    private static string[] ShellArguments(string command) => IsWindows
+        ? Args("/c", command)
+        : Args("-c", command);
     [Fact]
     public async Task TypedOperationsBuildExpectedCommands()
     {
@@ -50,7 +61,7 @@ public sealed class KindClientTests
     [Fact]
     public async Task ExecuteAsyncCapturesSuccessfulProcessOutput()
     {
-        var result = await new KindClient(new KindClientOptions { ExecutablePath = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe" }).ExecuteAsync(Args("/c", "echo", "hello"));
+        var result = await new KindClient(new KindClientOptions { ExecutablePath = ShellPath }).ExecuteAsync(ShellArguments("echo hello"));
         result.ExitCode.ShouldBe(0);
         result.StandardOutput!.ShouldContain("hello");
     }
@@ -58,7 +69,8 @@ public sealed class KindClientTests
     [Fact]
     public async Task ExecuteAsyncReportsNonzeroExitCodeAndOutput()
     {
-        var exception = await Should.ThrowAsync<KindCommandException>(() => new KindClient(new KindClientOptions { ExecutablePath = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe" }).ExecuteAsync(Args("/c", "echo error 1>&2 & exit 7")));
+        var command = IsWindows ? "echo error 1>&2 & exit 7" : "echo error >&2; exit 7";
+        var exception = await Should.ThrowAsync<KindCommandException>(() => new KindClient(new KindClientOptions { ExecutablePath = ShellPath }).ExecuteAsync(ShellArguments(command)));
         exception.ExitCode.ShouldBe(7);
         exception.StandardError!.ShouldContain("error");
     }
