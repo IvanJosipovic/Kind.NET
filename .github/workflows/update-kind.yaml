@@ -1,0 +1,100 @@
+name: Update Kind
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - src/Kind.NET/Kind.NET.csproj
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-kind:
+    name: Download Kind assemblies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Kind assemblies
+        id: download-kind
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          [xml]$project = Get-Content -Raw src/Kind.NET/Kind.NET.csproj
+          $kindVersion = $project.SelectSingleNode('//KindVersion').InnerText.Trim()
+          if ([string]::IsNullOrWhiteSpace($kindVersion)) {
+            throw 'Could not find KindVersion in src/Kind.NET/Kind.NET.csproj'
+          }
+
+          $releaseUrl = "https://github.com/kubernetes-sigs/kind/releases/download/$kindVersion"
+          $assets = [ordered]@{
+            'win-x64' = 'kind-windows-amd64'
+            # Kind does not publish a Windows ARM64 asset; Windows ARM can run
+            # the official AMD64 binary through its x64 compatibility layer.
+            'win-arm64' = 'kind-windows-amd64'
+            'linux-x64' = 'kind-linux-amd64'
+            'linux-arm64' = 'kind-linux-arm64'
+            'osx-x64' = 'kind-darwin-amd64'
+            'osx-arm64' = 'kind-darwin-arm64'
+          }
+
+          foreach ($entry in $assets.GetEnumerator()) {
+            $runtime = $entry.Key
+            $asset = $entry.Value
+            $destination = "src/Kind.NET/runtimes/$runtime/native"
+            New-Item -ItemType Directory -Force $destination | Out-Null
+
+            if ($runtime.StartsWith('win-')) {
+              $output = Join-Path $destination 'kind.exe'
+            }
+            else {
+              $output = Join-Path $destination 'kind'
+            }
+
+            Invoke-WebRequest -Uri "$releaseUrl/$asset" -OutFile $output
+            $downloadedFile = Get-Item -LiteralPath $output -ErrorAction SilentlyContinue
+            if ($null -eq $downloadedFile -or $downloadedFile.Length -eq 0) {
+              throw "Kind asset was not downloaded correctly: $output"
+            }
+
+            if (-not $runtime.StartsWith('win-')) {
+              & chmod +x $output
+              if ($LASTEXITCODE -ne 0) {
+                throw "Could not mark $output as executable"
+              }
+            }
+          }
+
+          Write-Host "Downloaded Kind $kindVersion assemblies."
+          "kind-version=$kindVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Check files changed
+        id: checkfiles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          git add src/Kind.NET/runtimes
+          $createPr = (git diff --cached --numstat | Measure-Object -Line).Lines -gt 0
+          "createpr=$($createPr.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Create pull request
+        if: steps.checkfiles.outputs.createpr == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ github.token }}
+          branch: update-kind
+          delete-branch: true
+          commit-message: 'feat(kind): update kind to ${{ steps.download-kind.outputs.kind-version }}'
+          title: 'feat(kind): update kind to ${{ steps.download-kind.outputs.kind-version }}'
+          body: 'Updates the bundled Kind assemblies to Kind ${{ steps.download-kind.outputs.kind-version }}.'

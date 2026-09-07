@@ -49,5 +49,30 @@
         "benchmarks/**"
       ]
     },
+    {
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchFileNames": [
+        "src/Kind.NET/Kind.NET.csproj"
+      ],
+      "automerge": false,
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "kind"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": [
+        "^src/Kind\\.NET/Kind\\.NET\\.csproj$"
+      ],
+      "matchStrings": [
+        "<KindVersion>\\s*(?<currentValue>v?\\d+\\.\\d+\\.\\d+)\\s*</KindVersion>"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "kubernetes-sigs/kind",
+      "versioningTemplate": "semver"
+    }
   ]
 }
