@@ -58,11 +58,7 @@ public sealed class KindClient
         try { process.Start(); } catch (Exception ex) { throw new KindCommandException($"Unable to start Kind executable '{_executable}'.", null, null, null, ex); }
         using var timeout = _options.CommandTimeout is null ? null : new CancellationTokenSource(_options.CommandTimeout.Value);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout?.Token ?? CancellationToken.None);
-#if NETSTANDARD2_0
-        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
-#else
         var stdout = process.StandardOutput.ReadToEndAsync(linked.Token); var stderr = process.StandardError.ReadToEndAsync(linked.Token);
-#endif
         try { await WaitForExitAsync(process, linked.Token).ConfigureAwait(false); }
         catch (OperationCanceledException ex)
         {

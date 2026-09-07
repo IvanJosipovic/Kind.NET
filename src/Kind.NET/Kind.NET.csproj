@@ -21,12 +21,12 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Kind.NET.Tests" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <None Include="runtimes\win-x64\native\kind.exe" Pack="true" PackagePath="runtimes/win-x64/native/" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="runtimes\win-arm64\native\kind.exe" Pack="true" PackagePath="runtimes/win-arm64/native/" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="runtimes\linux-x64\native\kind" Pack="true" PackagePath="runtimes/linux-x64/native/" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="runtimes\linux-arm64\native\kind" Pack="true" PackagePath="runtimes/linux-arm64/native/" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="runtimes\osx-x64\native\kind" Pack="true" PackagePath="runtimes/osx-x64/native/" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="runtimes\osx-arm64\native\kind" Pack="true" PackagePath="runtimes/osx-arm64/native/" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="runtimes\win-x64\native\kind.exe" Pack="true" PackagePath="runtimes/win-x64/native/" />
+    <None Include="runtimes\win-arm64\native\kind.exe" Pack="true" PackagePath="runtimes/win-arm64/native/" />
+    <None Include="runtimes\linux-x64\native\kind" Pack="true" PackagePath="runtimes/linux-x64/native/" />
+    <None Include="runtimes\linux-arm64\native\kind" Pack="true" PackagePath="runtimes/linux-arm64/native/" />
+    <None Include="runtimes\osx-x64\native\kind" Pack="true" PackagePath="runtimes/osx-x64/native/" />
+    <None Include="runtimes\osx-arm64\native\kind" Pack="true" PackagePath="runtimes/osx-arm64/native/" />
   </ItemGroup>
 
 </Project>
