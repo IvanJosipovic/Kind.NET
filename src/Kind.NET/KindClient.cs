@@ -64,7 +64,11 @@ public sealed class KindClient
         var stdout = process.StandardOutput.ReadToEndAsync(linked.Token); var stderr = process.StandardError.ReadToEndAsync(linked.Token);
 #endif
         try { await WaitForExitAsync(process, linked.Token).ConfigureAwait(false); }
-        catch (OperationCanceledException ex) { try { if (!process.HasExited) process.Kill(); } catch { } throw new KindCommandException("Kind command was cancelled or timed out.", null, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false), ex); }
+        catch (OperationCanceledException ex)
+        {
+            try { if (!process.HasExited) process.Kill(); } catch { }
+            throw new KindCommandException("Kind command was cancelled or timed out.", null, await ReadOutputAsync(stdout).ConfigureAwait(false), await ReadOutputAsync(stderr).ConfigureAwait(false), ex);
+        }
         var result = new KindCommandResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
         if (result.ExitCode != 0) throw new KindCommandException($"Kind command failed with exit code {result.ExitCode}.", result.ExitCode, result.StandardOutput, result.StandardError);
         return result;
@@ -76,6 +80,12 @@ public sealed class KindClient
         process.EnableRaisingEvents = true; process.Exited += (_, _) => tcs.TrySetResult(null);
         if (process.HasExited) tcs.TrySetResult(null);
         token.Register(() => tcs.TrySetCanceled(token)); return tcs.Task;
+    }
+
+    private static async Task<string> ReadOutputAsync(Task<string> output)
+    {
+        try { return await output.ConfigureAwait(false); }
+        catch (OperationCanceledException) { return string.Empty; }
     }
 
     private static List<string> GetKubeConfigArguments(string name, bool internalAddress)

@@ -76,6 +76,19 @@ public sealed class KindClientTests
     }
 
     [Fact]
+    public async Task ExecuteAsyncReportsCancellationAndStopsProcess()
+    {
+        var command = IsWindows ? "for /L %i in (0,0,1) do @rem" : "while true; do :; done";
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        var exception = await Should.ThrowAsync<KindCommandException>(() =>
+            new KindClient(new KindClientOptions { ExecutablePath = ShellPath }).ExecuteAsync(ShellArguments(command), cancellation.Token));
+
+        exception.Message.ShouldBe("Kind command was cancelled or timed out.");
+        exception.InnerException.ShouldBeAssignableTo<OperationCanceledException>();
+    }
+
+    [Fact]
     public async Task ExecuteAsyncReportsUnstartableExecutable()
     {
         var exception = await Should.ThrowAsync<KindCommandException>(() => new KindClient(new KindClientOptions { ExecutablePath = "missing-kind-executable" }).ExecuteAsync(Args("version")));
