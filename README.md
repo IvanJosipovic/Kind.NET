@@ -2,7 +2,8 @@
 
 [![Nuget](https://img.shields.io/nuget/vpre/Kind.NET.svg?style=flat-square)](https://www.nuget.org/packages/Kind.NET)
 [![Nuget)](https://img.shields.io/nuget/dt/Kind.NET.svg?style=flat-square)](https://www.nuget.org/packages/Kind.NET)
-[![codecov](https://codecov.io/gh/IvanJosipovic/Kind.NET/branch/main/graph/badge.svg?token=h453kfi3zo)](https://codecov.io/gh/IvanJosipovic/Kind.NET)
+[![codecov](https://codecov.io/gh/IvanJosipovic/Kind.NET/graph/badge.svg?token=nZGzjHvaDh)](https://codecov.io/gh/IvanJosipovic/Kind.NET)
+
 ## What is this?
 
 Kind.NET is a cross-platform .NET wrapper for the Kind CLI. The standard NuGet
