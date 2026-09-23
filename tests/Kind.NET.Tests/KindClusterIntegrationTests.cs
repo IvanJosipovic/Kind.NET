@@ -1,6 +1,8 @@
 namespace Kind.NET.Tests;
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 
 public sealed class KindClusterIntegrationTests
 {
@@ -27,9 +29,34 @@ public sealed class KindClusterIntegrationTests
         }
 
         var image = $"kind-net-node:{Guid.NewGuid():N}";
+        var architecture = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => "amd64",
+            Architecture.Arm64 => "arm64",
+            _ => throw new PlatformNotSupportedException($"Unsupported test architecture {RuntimeInformation.ProcessArchitecture}.")
+        };
         var client = new KindClient(new KindClientOptions { CommandTimeout = TimeSpan.FromMinutes(12) });
-        await client.BuildNodeImageAsync(new KindBuildNodeImageOptions("v1.37.0", Image: image, Type: "release"), cancellationToken);
-        (await RunContainerCliAsync(provider, ["image", "inspect", image], cancellationToken)).StandardOutput.ShouldContain(image);
+        try
+        {
+            await client.BuildNodeImageAsync(new KindBuildNodeImageOptions(
+                "v1.37.0",
+                BaseImage: "docker.io/kindest/base:v20260820-69b56db7",
+                Image: image,
+                Type: "release",
+                Architecture: architecture), cancellationToken);
+            (await RunContainerCliAsync(provider, ["image", "inspect", image], cancellationToken)).StandardOutput.ShouldContain(image);
+        }
+        finally
+        {
+            try
+            {
+                await RunContainerCliAsync(provider, ["image", "rm", "--force", image], CancellationToken.None);
+            }
+            catch
+            {
+                // Cleanup must not hide the failure that caused this finally block.
+            }
+        }
     }
 
     [Fact(Timeout = 1_500_000)]
@@ -52,46 +79,82 @@ public sealed class KindClusterIntegrationTests
         }
 
         var clusterName = $"kn-{Guid.NewGuid():N}";
+        var secondClusterName = $"kn-{Guid.NewGuid():N}";
         var workspace = Path.Combine(Path.GetTempPath(), $"kind-net-{clusterName}");
         Directory.CreateDirectory(workspace);
+        var configPath = Path.Combine(workspace, "kind-config.yaml");
         var kubeConfigPath = Path.Combine(workspace, "kubeconfig.yaml");
+        var exportedKubeConfigPath = Path.Combine(workspace, "exported-kubeconfig.yaml");
+        var exportedInternalKubeConfigPath = Path.Combine(workspace, "exported-internal-kubeconfig.yaml");
         var logsPath = Path.Combine(workspace, "logs");
         var archivePath = Path.Combine(workspace, "image.tar");
         var imageContextPath = Path.Combine(workspace, "image");
         Directory.CreateDirectory(imageContextPath);
         var dockerImage = $"kind-net-test:{Guid.NewGuid():N}";
         var archiveImage = $"{dockerImage}-archive";
-        var client = new KindClient(new KindClientOptions { CommandTimeout = TimeSpan.FromMinutes(12) });
+        var client = new KindClient(new KindClientOptions
+        {
+            CommandTimeout = TimeSpan.FromMinutes(12),
+            Environment = new Dictionary<string, string?> { ["KUBECONFIG"] = kubeConfigPath }
+        });
         var clusterMayExist = false;
+        var secondClusterMayExist = false;
 
         try
         {
+            await File.WriteAllTextAsync(configPath, "kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnodes:\n- role: control-plane\n- role: worker\n", cancellationToken);
             var version = await client.GetVersionAsync(cancellationToken);
             version.ShouldContain("kind v");
             (await client.ExecuteAsync(["--quiet", "version"], cancellationToken)).StandardOutput.Trim()
                 .ShouldBe(version.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1].TrimStart('v'));
             (await client.ExecuteAsync(["help"], cancellationToken)).StandardOutput.ShouldContain("Available Commands");
+            (await client.ExecuteAsync(["--verbosity", "0", "version"], cancellationToken)).StandardOutput.ShouldContain("kind v");
             foreach (var shell in new[] { "bash", "fish", "powershell", "zsh" })
             {
                 (await client.GenerateCompletionAsync(shell, cancellationToken)).ShouldNotBeNullOrWhiteSpace();
             }
 
             clusterMayExist = true;
-            await client.CreateClusterAsync(new KindClusterOptions(Name: clusterName, Wait: TimeSpan.FromMinutes(5)), cancellationToken);
+            await client.CreateClusterAsync(new KindClusterOptions(
+                Name: clusterName,
+                Image: "kindest/node:v1.37.0",
+                ConfigPath: configPath,
+                KubeConfigPath: kubeConfigPath,
+                Wait: TimeSpan.FromMinutes(5),
+                Retain: true), cancellationToken);
+            File.Exists(kubeConfigPath).ShouldBeTrue();
+
+            secondClusterMayExist = true;
+            await client.CreateClusterAsync(new KindClusterOptions(
+                Name: secondClusterName,
+                Image: "kindest/node:v1.37.0",
+                Wait: TimeSpan.FromMinutes(5)), cancellationToken);
 
             var clusters = await client.GetClustersAsync(cancellationToken);
             clusters.ShouldContain(clusterName);
+            clusters.ShouldContain(secondClusterName);
 
             var nodesFromCluster = await client.GetNodesAsync(clusterName, cancellationToken: cancellationToken);
             nodesFromCluster.ShouldContain(node => node.Contains($"{clusterName}-control-plane", StringComparison.Ordinal));
+            var workerNode = $"{clusterName}-worker";
+            var controlPlaneNode = $"{clusterName}-control-plane";
+            nodesFromCluster.ShouldContain(workerNode);
+            (await client.GetNodesAsync(secondClusterName, cancellationToken)).ShouldContain($"{secondClusterName}-control-plane");
             var nodesFromAllClusters = await client.GetAllNodesAsync(cancellationToken);
-            nodesFromAllClusters.ShouldContain(node => node.Contains($"{clusterName}-control-plane", StringComparison.Ordinal));
+            nodesFromAllClusters.ShouldContain(controlPlaneNode);
+            nodesFromAllClusters.ShouldContain(workerNode);
+            nodesFromAllClusters.ShouldContain($"{secondClusterName}-control-plane");
 
             var kubeConfig = await client.GetKubeConfigAsync(clusterName, cancellationToken: cancellationToken);
             kubeConfig.ShouldContain($"kind-{clusterName}");
-            await client.ExportKubeConfigAsync(clusterName, kubeConfigPath, cancellationToken: cancellationToken);
-            File.Exists(kubeConfigPath).ShouldBeTrue();
-            (await File.ReadAllTextAsync(kubeConfigPath, cancellationToken)).ShouldContain($"kind-{clusterName}");
+            var internalKubeConfig = await client.GetInternalKubeConfigAsync(clusterName, cancellationToken);
+            internalKubeConfig.ShouldContain($"kind-{clusterName}");
+            await client.ExportKubeConfigAsync(clusterName, exportedKubeConfigPath, cancellationToken);
+            await client.ExportInternalKubeConfigAsync(clusterName, exportedInternalKubeConfigPath, cancellationToken);
+            File.Exists(exportedKubeConfigPath).ShouldBeTrue();
+            File.Exists(exportedInternalKubeConfigPath).ShouldBeTrue();
+            (await File.ReadAllTextAsync(exportedKubeConfigPath, cancellationToken)).ShouldContain($"kind-{clusterName}");
+            (await File.ReadAllTextAsync(exportedInternalKubeConfigPath, cancellationToken)).ShouldContain($"kind-{clusterName}");
 
             var nodes = await RunKubectlAsync(kubeConfigPath, cancellationToken, "--context", $"kind-{clusterName}", "get", "nodes", "--no-headers");
             var nodeLines = nodes.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
@@ -105,23 +168,31 @@ public sealed class KindClusterIntegrationTests
             var imageTag = "busybox:1.37.0";
             await File.WriteAllTextAsync(Path.Combine(imageContextPath, "Dockerfile"), $"FROM {imageTag}\nCMD [\"sleep\", \"3600\"]\n", cancellationToken);
             await RunContainerCliAsync(provider, ["build", "--tag", dockerImage, "--file", Path.Combine(imageContextPath, "Dockerfile"), imageContextPath], cancellationToken);
-            await client.LoadDockerImagesAsync(clusterName, [dockerImage], nodesFromCluster, cancellationToken);
-
             await RunContainerCliAsync(provider, ["tag", dockerImage, archiveImage], cancellationToken);
+            await client.LoadDockerImagesAsync(clusterName, [dockerImage, archiveImage], [workerNode], cancellationToken);
             await RunContainerCliAsync(provider, ["save", "--output", archivePath, archiveImage], cancellationToken);
             File.Exists(archivePath).ShouldBeTrue();
-            await client.LoadImageArchiveAsync(clusterName, archivePath, nodesFromCluster, cancellationToken);
+            await client.LoadImageArchiveAsync(clusterName, archivePath, cancellationToken: cancellationToken);
 
-            foreach (var (podName, image) in new[] { ("docker-image-load", dockerImage), ("archive-image-load", archiveImage) })
+            foreach (var (podName, image, nodeName) in new[]
             {
-                await RunKubectlAsync(kubeConfigPath, cancellationToken, "run", podName, "--image", image, "--image-pull-policy=Never", "--restart=Never", "--", "sleep", "3600");
-                await RunKubectlAsync(kubeConfigPath, cancellationToken, "wait", "--for=condition=Ready", "--timeout=120s", $"pod/{podName}");
+                ("docker-image-load", dockerImage, workerNode),
+                ("archive-image-load", archiveImage, controlPlaneNode)
+            })
+            {
+                var overrides = JsonSerializer.Serialize(new { spec = new { nodeName } });
+                await RunKubectlAsync(kubeConfigPath, cancellationToken, "--context", $"kind-{clusterName}", "run", podName, "--image", image, "--image-pull-policy=Never", "--restart=Never", "--overrides", overrides, "--", "sleep", "3600");
+                await RunKubectlAsync(kubeConfigPath, cancellationToken, "--context", $"kind-{clusterName}", "wait", "--for=condition=Ready", "--timeout=120s", $"pod/{podName}");
             }
 
             await client.ExportLogsAsync(clusterName, logsPath, cancellationToken);
             Directory.GetFiles(logsPath, "*", SearchOption.AllDirectories).ShouldNotBeEmpty();
 
-            await client.DeleteClusterAsync(new KindDeleteClusterOptions(clusterName), cancellationToken);
+            await client.DeleteClusterAsync(new KindDeleteClusterOptions(secondClusterName, kubeConfigPath), cancellationToken);
+            secondClusterMayExist = false;
+            (await client.GetClustersAsync(cancellationToken)).ShouldNotContain(secondClusterName);
+
+            await client.DeleteClusterAsync(new KindDeleteClusterOptions(clusterName, kubeConfigPath), cancellationToken);
             clusterMayExist = false;
 
             (await client.GetClustersAsync()).ShouldNotContain(clusterName);
@@ -130,7 +201,21 @@ public sealed class KindClusterIntegrationTests
         {
             if (clusterMayExist)
             {
-                await client.DeleteClusterAsync(new KindDeleteClusterOptions(clusterName));
+                await client.DeleteClusterAsync(new KindDeleteClusterOptions(clusterName, kubeConfigPath));
+            }
+
+            if (secondClusterMayExist)
+            {
+                await client.DeleteClusterAsync(new KindDeleteClusterOptions(secondClusterName, kubeConfigPath));
+            }
+
+            try
+            {
+                await RunContainerCliAsync(provider, ["image", "rm", "--force", dockerImage, archiveImage], CancellationToken.None);
+            }
+            catch
+            {
+                // Cleanup must not hide the failure that caused this finally block.
             }
 
             if (Directory.Exists(workspace)) Directory.Delete(workspace, recursive: true);

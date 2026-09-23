@@ -55,6 +55,40 @@ public sealed class KindClientTests
     }
 
     [Fact]
+    public async Task DefaultClusterOverloadsBuildExpectedCommands()
+    {
+        var calls = new List<IReadOnlyList<string>>();
+        var client = new KindClient(new KindClientOptions { UseBundledExecutable = false }, (arguments, _) =>
+        {
+            calls.Add(arguments);
+            return Task.FromResult(new KindCommandResult(0, "output", ""));
+        });
+
+        await client.GetNodesAsync();
+        await client.GetKubeConfigAsync();
+        await client.GetInternalKubeConfigAsync();
+        await client.ExportKubeConfigAsync();
+        await client.ExportInternalKubeConfigAsync();
+        await client.ExportDefaultKubeConfigAsync("default.yaml");
+        await client.ExportDefaultInternalKubeConfigAsync("default-internal.yaml");
+        await client.ExportLogsAsync();
+        await client.ExportDefaultLogsAsync("default-logs");
+
+        calls.ShouldBe(new IReadOnlyList<string>[]
+        {
+            Args("get", "nodes", "--name", "kind"),
+            Args("get", "kubeconfig", "--name", "kind"),
+            Args("get", "kubeconfig", "--name", "kind", "--internal"),
+            Args("export", "kubeconfig", "--name", "kind"),
+            Args("export", "kubeconfig", "--name", "kind", "--internal"),
+            Args("export", "kubeconfig", "--name", "kind", "--kubeconfig", "default.yaml"),
+            Args("export", "kubeconfig", "--name", "kind", "--kubeconfig", "default-internal.yaml", "--internal"),
+            Args("export", "logs", "--name", "kind"),
+            Args("export", "logs", "default-logs", "--name", "kind")
+        });
+    }
+
+    [Fact]
     public async Task GenericExecutionPropagatesCommandFailure()
     {
         var exception = await Should.ThrowAsync<KindCommandException>(() => new KindClient(new KindClientOptions { UseBundledExecutable = false }, (_, _) =>
@@ -83,6 +117,47 @@ public sealed class KindClientTests
         var result = await new KindClient(new KindClientOptions { ExecutablePath = ShellPath }).ExecuteAsync(ShellArguments("echo hello"));
         result.ExitCode.ShouldBe(0);
         result.StandardOutput!.ShouldContain("hello");
+    }
+
+    [Fact]
+    public async Task ExecuteAsyncUsesConfiguredWorkingDirectoryAndEnvironment()
+    {
+        var workingDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workingDirectory);
+        try
+        {
+            var command = IsWindows
+                ? "echo %KIND_NET_TEST_VALUE% & cd"
+                : "printf '%s\\n' \"$KIND_NET_TEST_VALUE\"; pwd";
+            var result = await new KindClient(new KindClientOptions
+            {
+                ExecutablePath = ShellPath,
+                WorkingDirectory = workingDirectory,
+                Environment = new Dictionary<string, string?> { ["KIND_NET_TEST_VALUE"] = "environment-value" }
+            }).ExecuteAsync(ShellArguments(command));
+
+            result.StandardOutput.ShouldContain("environment-value");
+            result.StandardOutput.ShouldContain(workingDirectory);
+        }
+        finally
+        {
+            Directory.Delete(workingDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsyncHonorsConfiguredCommandTimeout()
+    {
+        var command = IsWindows ? "for /L %i in (0,0,1) do @rem" : "while true; do :; done";
+        var exception = await Should.ThrowAsync<KindCommandException>(() =>
+            new KindClient(new KindClientOptions
+            {
+                ExecutablePath = ShellPath,
+                CommandTimeout = TimeSpan.FromMilliseconds(100)
+            }).ExecuteAsync(ShellArguments(command)));
+
+        exception.Message.ShouldBe("Kind command was cancelled or timed out.");
+        exception.InnerException.ShouldBeAssignableTo<OperationCanceledException>();
     }
 
     [Fact]
