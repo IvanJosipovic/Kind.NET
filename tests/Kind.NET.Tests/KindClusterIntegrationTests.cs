@@ -224,11 +224,11 @@ public sealed class KindClusterIntegrationTests
 
     private static async Task<string?> CheckProviderAsync(string provider)
     {
-        var arguments = provider.ToLowerInvariant() switch
+        string[] arguments = provider.ToLowerInvariant() switch
         {
-            "docker" => new[] { "info", "--format", "{{.ServerVersion}}" },
-            "podman" => new[] { "info", "--format", "{{.Host.Version}}" },
-            "nerdctl" => new[] { "info" },
+            "docker" => ["info", "--format", "{{.ServerVersion}}"],
+            "podman" => ["info", "--format", "{{.Host.Version}}"],
+            "nerdctl" => ["info"],
             _ => throw new InvalidOperationException($"Unsupported KIND_EXPERIMENTAL_PROVIDER '{provider}'.")
         };
 

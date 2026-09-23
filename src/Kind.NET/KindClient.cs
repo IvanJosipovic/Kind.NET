@@ -1,14 +1,13 @@
 using System.Diagnostics;
-using System.Text;
 
 namespace Kind.NET;
 
 /// <summary>Provides access to the Kind command-line interface.</summary>
 public sealed class KindClient
 {
-    private static readonly string[] GetClustersArguments = { "get", "clusters" };
-    private static readonly string[] VersionArguments = { "version" };
-    private static readonly char[] NewlineSeparators = { '\r', '\n' };
+    private static readonly string[] s_getClustersArguments = ["get", "clusters"];
+    private static readonly string[] s_versionArguments = ["version"];
+    private static readonly char[] s_newlineSeparators = ['\r', '\n'];
     private readonly KindClientOptions _options;
     private readonly string _executable;
     private readonly Func<IReadOnlyList<string>, CancellationToken, Task<KindCommandResult>>? _executor;
@@ -40,17 +39,17 @@ public sealed class KindClient
     public Task<KindCommandResult> DeleteClusterAsync(KindDeleteClusterOptions options, CancellationToken cancellationToken = default) => ExecuteAsync(KindArgumentBuilder.Delete(options), cancellationToken);
     /// <summary>Lists Kind clusters.</summary>
     /// <param name="cancellationToken">A token that cancels the command.</param>
-    public async Task<IReadOnlyList<string>> GetClustersAsync(CancellationToken cancellationToken = default) => (await ExecuteAsync(GetClustersArguments, cancellationToken).ConfigureAwait(false)).StandardOutput.Split(NewlineSeparators, StringSplitOptions.RemoveEmptyEntries);
+    public async Task<IReadOnlyList<string>> GetClustersAsync(CancellationToken cancellationToken = default) => (await ExecuteAsync(s_getClustersArguments, cancellationToken).ConfigureAwait(false)).StandardOutput.Split(s_newlineSeparators, StringSplitOptions.RemoveEmptyEntries);
     /// <summary>Lists the nodes in the default Kind cluster.</summary>
     /// <param name="cancellationToken">A token that cancels the command.</param>
     public Task<IReadOnlyList<string>> GetNodesAsync(CancellationToken cancellationToken = default) => GetNodesAsync("kind", cancellationToken);
     /// <summary>Lists the nodes in the named Kind cluster.</summary>
     /// <param name="name">The Kind cluster name.</param>
     /// <param name="cancellationToken">A token that cancels the command.</param>
-    public async Task<IReadOnlyList<string>> GetNodesAsync(string name, CancellationToken cancellationToken = default) => (await ExecuteAsync(GetNodesArguments(name), cancellationToken).ConfigureAwait(false)).StandardOutput.Split(NewlineSeparators, StringSplitOptions.RemoveEmptyEntries);
+    public async Task<IReadOnlyList<string>> GetNodesAsync(string name, CancellationToken cancellationToken = default) => (await ExecuteAsync(GetNodesArguments(name), cancellationToken).ConfigureAwait(false)).StandardOutput.Split(s_newlineSeparators, StringSplitOptions.RemoveEmptyEntries);
     /// <summary>Lists the nodes in every Kind cluster.</summary>
     /// <param name="cancellationToken">A token that cancels the command.</param>
-    public async Task<IReadOnlyList<string>> GetAllNodesAsync(CancellationToken cancellationToken = default) => (await ExecuteAsync(GetAllNodesArguments, cancellationToken).ConfigureAwait(false)).StandardOutput.Split(NewlineSeparators, StringSplitOptions.RemoveEmptyEntries);
+    public async Task<IReadOnlyList<string>> GetAllNodesAsync(CancellationToken cancellationToken = default) => (await ExecuteAsync(s_getAllNodesArguments, cancellationToken).ConfigureAwait(false)).StandardOutput.Split(s_newlineSeparators, StringSplitOptions.RemoveEmptyEntries);
     /// <summary>Gets the kubeconfig for the default Kind cluster as YAML.</summary>
     /// <param name="cancellationToken">A token that cancels the command.</param>
     public Task<string> GetKubeConfigAsync(CancellationToken cancellationToken = default) => GetKubeConfigAsync("kind", cancellationToken);
@@ -131,7 +130,7 @@ public sealed class KindClient
     public Task<KindCommandResult> BuildNodeImageAsync(KindBuildNodeImageOptions options, CancellationToken cancellationToken = default) => ExecuteAsync(KindArgumentBuilder.BuildNodeImage(options), cancellationToken);
     /// <summary>Gets the installed Kind version.</summary>
     /// <param name="cancellationToken">A token that cancels the command.</param>
-    public async Task<string> GetVersionAsync(CancellationToken cancellationToken = default) => (await ExecuteAsync(VersionArguments, cancellationToken).ConfigureAwait(false)).StandardOutput;
+    public async Task<string> GetVersionAsync(CancellationToken cancellationToken = default) => (await ExecuteAsync(s_versionArguments, cancellationToken).ConfigureAwait(false)).StandardOutput;
     /// <summary>Generates a shell completion script.</summary>
     /// <param name="shell">The shell for which to generate completion, such as <c>bash</c>, <c>fish</c>, <c>powershell</c>, or <c>zsh</c>.</param>
     /// <param name="cancellationToken">A token that cancels the command.</param>
@@ -189,11 +188,11 @@ public sealed class KindClient
 
     private Task<KindCommandResult> ExportLogsCoreAsync(string name, string? path, CancellationToken cancellationToken) => ExecuteAsync(KindArgumentBuilder.ExportLogs(name, path), cancellationToken);
 
-    private static readonly string[] GetAllNodesArguments = { "get", "nodes", "--all-clusters" };
+    private static readonly string[] s_getAllNodesArguments = ["get", "nodes", "--all-clusters"];
 
     private static List<string> GetNodesArguments(string name)
     {
-        return new List<string> { "get", "nodes", "--name", name };
+        return ["get", "nodes", "--name", name];
     }
 
 }

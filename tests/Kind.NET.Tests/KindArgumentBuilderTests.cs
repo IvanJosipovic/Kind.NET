@@ -3,20 +3,20 @@ namespace Kind.NET.Tests;
 public sealed class KindArgumentBuilderTests
 {
     private static string[] Args(params string[] values) => values;
-    private static readonly string[] AppImages = { "app:one", "db:two" };
-    private static readonly string[] WorkerNode = { "worker" };
-    private static readonly string[] ExpectedCreate = { "create", "cluster", "--name", "demo", "--image", "kindest/node:v1", "--config", "config path.yaml", "--kubeconfig", "kube config", "--wait", "2m", "--retain" };
+    private static readonly string[] s_appImages = ["app:one", "db:two"];
+    private static readonly string[] s_workerNode = ["worker"];
+    private static readonly string[] s_expectedCreate = ["create", "cluster", "--name", "demo", "--image", "kindest/node:v1", "--config", "config path.yaml", "--kubeconfig", "kube config", "--wait", "2m", "--retain"];
     [Fact]
     public void CreateIncludesAllOptions()
     {
         var actual = KindArgumentBuilder.Create(new KindClusterOptions("demo", "kindest/node:v1", "config path.yaml", "kube config", TimeSpan.FromMinutes(2), true));
-        actual.ShouldBe(ExpectedCreate);
+        actual.ShouldBe(s_expectedCreate);
     }
 
     [Fact]
     public void LoadDockerImagesPreservesMultipleImagesAndNodes()
     {
-        var actual = KindArgumentBuilder.LoadDockerImages("demo", AppImages, WorkerNode);
+        var actual = KindArgumentBuilder.LoadDockerImages("demo", s_appImages, s_workerNode);
         actual.ShouldBe(Args("load", "docker-image", "app:one", "db:two", "--name", "demo", "--nodes", "worker"));
     }
 
@@ -44,7 +44,7 @@ public sealed class KindArgumentBuilderTests
     [Fact]
     public void LoadImageArchiveIncludesSelectedNodes()
     {
-        KindArgumentBuilder.LoadImageArchive("demo", "images path.tar", WorkerNode)
+        KindArgumentBuilder.LoadImageArchive("demo", "images path.tar", s_workerNode)
             .ShouldBe(Args("load", "image-archive", "images path.tar", "--name", "demo", "--nodes", "worker"));
     }
 
