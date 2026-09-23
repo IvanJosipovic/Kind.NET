@@ -21,9 +21,44 @@ public sealed class KindArgumentBuilderTests
     }
 
     [Fact]
+    public void DeleteIncludesAlternateKubeconfig()
+    {
+        KindArgumentBuilder.Delete(new KindDeleteClusterOptions("demo", "config path.yaml"))
+            .ShouldBe(Args("delete", "cluster", "--name", "demo", "--kubeconfig", "config path.yaml"));
+    }
+
+    [Fact]
+    public void ExportKubeConfigIncludesPathAndInternalAddress()
+    {
+        KindArgumentBuilder.ExportKubeConfig("demo", "config path.yaml", internalAddress: true)
+            .ShouldBe(Args("export", "kubeconfig", "--name", "demo", "--kubeconfig", "config path.yaml", "--internal"));
+    }
+
+    [Fact]
+    public void ExportLogsIncludesPathAndClusterName()
+    {
+        KindArgumentBuilder.ExportLogs("demo", "logs path")
+            .ShouldBe(Args("export", "logs", "logs path", "--name", "demo"));
+    }
+
+    [Fact]
+    public void LoadImageArchiveIncludesSelectedNodes()
+    {
+        KindArgumentBuilder.LoadImageArchive("demo", "images path.tar", WorkerNode)
+            .ShouldBe(Args("load", "image-archive", "images path.tar", "--name", "demo", "--nodes", "worker"));
+    }
+
+    [Fact]
     public void BuildNodeImageOmitsUnspecifiedOptions()
     {
         var actual = KindArgumentBuilder.BuildNodeImage(new KindBuildNodeImageOptions("source path", Image: "custom:tag"));
         actual.ShouldBe(Args("build", "node-image", "source path", "--image", "custom:tag"));
+    }
+
+    [Fact]
+    public void BuildNodeImageIncludesAllOptions()
+    {
+        KindArgumentBuilder.BuildNodeImage(new KindBuildNodeImageOptions("v1.37.0", "kindest/base:custom", "custom:tag", "release", "arm64"))
+            .ShouldBe(Args("build", "node-image", "v1.37.0", "--arch", "arm64", "--base-image", "kindest/base:custom", "--image", "custom:tag", "--type", "release"));
     }
 }

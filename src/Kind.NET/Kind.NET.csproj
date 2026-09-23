@@ -13,9 +13,12 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
-    <VerifyReferenceAotCompatibility Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</VerifyReferenceAotCompatibility>
+    <IsAotCompatible>true</IsAotCompatible>
+    <VerifyReferenceAotCompatibility>true</VerifyReferenceAotCompatibility>
     <KindVersion>v0.33.0</KindVersion>
+    <KindAssetRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</KindAssetRid>
+    <KindAssetRid Condition="'$(KindAssetRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</KindAssetRid>
+    <KindExecutableExtension Condition="'$(KindAssetRid)' == 'win-x64' or '$(KindAssetRid)' == 'win-arm64'">.exe</KindExecutableExtension>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,6 +30,12 @@
     <None Include="runtimes\linux-arm64\native\kind" Pack="true" PackagePath="runtimes/linux-arm64/native/" />
     <None Include="runtimes\osx-x64\native\kind" Pack="true" PackagePath="runtimes/osx-x64/native/" />
     <None Include="runtimes\osx-arm64\native\kind" Pack="true" PackagePath="runtimes/osx-arm64/native/" />
+    <Content Include="runtimes\$(KindAssetRid)\native\kind$(KindExecutableExtension)"
+             Link="runtimes\$(KindAssetRid)\native\kind$(KindExecutableExtension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Pack="false"
+             Condition="Exists('runtimes\$(KindAssetRid)\native\kind$(KindExecutableExtension)')" />
   </ItemGroup>
 
 </Project>

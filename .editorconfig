@@ -22,6 +22,8 @@ generated_code = true
 
 # C# files
 [*.cs]
+# Require XML documentation for public API members.
+dotnet_diagnostic.CS1591.severity = error
 # New line preferences
 csharp_new_line_before_open_brace = all
 csharp_new_line_before_else = true

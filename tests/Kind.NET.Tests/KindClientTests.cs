@@ -27,6 +27,8 @@ public sealed class KindClientTests
         await client.CreateClusterAsync(new KindClusterOptions("demo"));
         await client.DeleteClusterAsync(new KindDeleteClusterOptions("demo"));
         (await client.GetClustersAsync()).ShouldBe(Args("clusters"));
+        (await client.GetNodesAsync("demo")).ShouldBe(Args("clusters"));
+        (await client.GetAllNodesAsync()).ShouldBe(Args("clusters"));
         (await client.GetKubeConfigAsync("demo")).ShouldBe("clusters\n");
         await client.ExportKubeConfigAsync("demo");
         await client.ExportLogsAsync("demo");
@@ -36,18 +38,20 @@ public sealed class KindClientTests
         (await client.GetVersionAsync()).ShouldBe("clusters\n");
         (await client.GenerateCompletionAsync("powershell")).ShouldBe("clusters\n");
 
-        calls.Count.ShouldBe(11);
+        calls.Count.ShouldBe(13);
         calls[0].ShouldBe(Args("create", "cluster", "--name", "demo"));
         calls[1].ShouldBe(Args("delete", "cluster", "--name", "demo"));
         calls[2].ShouldBe(Args("get", "clusters"));
-        calls[3].ShouldBe(Args("get", "kubeconfig", "--name", "demo"));
-        calls[4].ShouldBe(Args("export", "kubeconfig", "--name", "demo"));
-        calls[5].ShouldBe(Args("export", "logs", "--name", "demo"));
-        calls[6].ShouldBe(Args("load", "docker-image", "app:latest", "--name", "demo"));
-        calls[7].ShouldBe(Args("load", "image-archive", "images.tar", "--name", "demo"));
-        calls[8].ShouldBe(Args("build", "node-image", "source"));
-        calls[9].ShouldBe(Args("version"));
-        calls[10].ShouldBe(Args("completion", "powershell"));
+        calls[3].ShouldBe(Args("get", "nodes", "--name", "demo"));
+        calls[4].ShouldBe(Args("get", "nodes", "--all-clusters"));
+        calls[5].ShouldBe(Args("get", "kubeconfig", "--name", "demo"));
+        calls[6].ShouldBe(Args("export", "kubeconfig", "--name", "demo"));
+        calls[7].ShouldBe(Args("export", "logs", "--name", "demo"));
+        calls[8].ShouldBe(Args("load", "docker-image", "app:latest", "--name", "demo"));
+        calls[9].ShouldBe(Args("load", "image-archive", "images.tar", "--name", "demo"));
+        calls[10].ShouldBe(Args("build", "node-image", "source"));
+        calls[11].ShouldBe(Args("version"));
+        calls[12].ShouldBe(Args("completion", "powershell"));
     }
 
     [Fact]
@@ -56,6 +60,21 @@ public sealed class KindClientTests
         var exception = await Should.ThrowAsync<KindCommandException>(() => new KindClient(new KindClientOptions { UseBundledExecutable = false }, (_, _) =>
             Task.FromException<KindCommandResult>(new KindCommandException("failed"))).ExecuteAsync(Args("version")));
         exception.Message.ShouldBe("failed");
+    }
+
+    [Fact]
+    public async Task GetInternalKubeConfigRequestsInternalAddress()
+    {
+        IReadOnlyList<string>? capturedArguments = null;
+        var client = new KindClient(new KindClientOptions { UseBundledExecutable = false }, (arguments, _) =>
+        {
+            capturedArguments = arguments;
+            return Task.FromResult(new KindCommandResult(0, "config", ""));
+        });
+
+        await client.GetInternalKubeConfigAsync("demo");
+
+        capturedArguments.ShouldBe(Args("get", "kubeconfig", "--name", "demo", "--internal"));
     }
 
     [Fact]
