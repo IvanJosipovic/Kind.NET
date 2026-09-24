@@ -23,6 +23,14 @@ internal static class KindArgumentBuilder
         Add(a, "--kubeconfig", path); if (internalAddress) a.Add("--internal"); return a;
     }
 
+    public static IReadOnlyList<string> ExportLogs(string name, string? path)
+    {
+        var a = new List<string> { "export", "logs" };
+        if (path is not null) a.Add(path);
+        a.Add("--name"); a.Add(name);
+        return a;
+    }
+
     public static IReadOnlyList<string> LoadDockerImages(string name, IEnumerable<string> images, IEnumerable<string>? nodes)
     {
         var a = new List<string> { "load", "docker-image" }; a.AddRange(images); Add(a, "--name", name);
@@ -37,7 +45,7 @@ internal static class KindArgumentBuilder
     public static IReadOnlyList<string> BuildNodeImage(KindBuildNodeImageOptions o)
     {
         var a = new List<string> { "build", "node-image" }; if (o.KubernetesSource is not null) a.Add(o.KubernetesSource!);
-        Add(a, "--base-image", o.BaseImage); Add(a, "--image", o.Image); Add(a, "--type", o.Type); return a;
+        Add(a, "--arch", o.Architecture); Add(a, "--base-image", o.BaseImage); Add(a, "--image", o.Image); Add(a, "--type", o.Type); return a;
     }
 
     private static void Add(List<string> a, string name, string? value) { if (!string.IsNullOrWhiteSpace(value)) { a.Add(name); a.Add(value!); } }

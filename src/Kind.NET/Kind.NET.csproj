@@ -13,20 +13,22 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
-    <VerifyReferenceAotCompatibility Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</VerifyReferenceAotCompatibility>
+    <IsAotCompatible>true</IsAotCompatible>
     <KindVersion>v0.33.0</KindVersion>
+    <KindAssetRid>$(RuntimeIdentifier)</KindAssetRid>
+    <KindAssetRid Condition="'$(KindAssetRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</KindAssetRid>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Kind.NET.Tests" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <None Include="runtimes\win-x64\native\kind.exe" Pack="true" PackagePath="runtimes/win-x64/native/" />
-    <None Include="runtimes\win-arm64\native\kind.exe" Pack="true" PackagePath="runtimes/win-arm64/native/" />
-    <None Include="runtimes\linux-x64\native\kind" Pack="true" PackagePath="runtimes/linux-x64/native/" />
-    <None Include="runtimes\linux-arm64\native\kind" Pack="true" PackagePath="runtimes/linux-arm64/native/" />
-    <None Include="runtimes\osx-x64\native\kind" Pack="true" PackagePath="runtimes/osx-x64/native/" />
-    <None Include="runtimes\osx-arm64\native\kind" Pack="true" PackagePath="runtimes/osx-arm64/native/" />
+    <None Include="runtimes\**\native\*"
+          Pack="true"
+          PackagePath="runtimes/" />
+    <None Update="runtimes\$(KindAssetRid)\native\*"
+          Link="%(Identity)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
