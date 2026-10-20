@@ -6,6 +6,8 @@ using System.Text.Json;
 
 public sealed class KindClusterIntegrationTests
 {
+    private sealed record ExternalProcessResult(int ExitCode, string StandardOutput, string StandardError);
+
     [Fact(Timeout = 900_000)]
     [Trait("Category", "Integration")]
     public async Task BuildsReleaseNodeImage()
@@ -243,10 +245,10 @@ public sealed class KindClusterIntegrationTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
-            var result = await Process.RunAndCaptureTextAsync(startInfo, timeout.Token);
-            return result.ExitStatus.ExitCode == 0
+            var result = await RunExternalProcessAsync(startInfo, timeout.Token);
+            return result.ExitCode == 0
                 ? null
-                : $"'{executable}' exited with code {result.ExitStatus.ExitCode}: {result.StandardError}";
+                : $"'{executable}' exited with code {result.ExitCode}: {result.StandardError}";
         }
         catch (Exception exception)
         {
@@ -254,21 +256,44 @@ public sealed class KindClusterIntegrationTests
         }
     }
 
-    private static async Task<ProcessTextOutput> RunKubectlAsync(string kubeConfigPath, CancellationToken cancellationToken, params string[] arguments)
+    private static async Task<ExternalProcessResult> RunKubectlAsync(string kubeConfigPath, CancellationToken cancellationToken, params string[] arguments)
         => await RunExternalAsync("kubectl", ["--kubeconfig", kubeConfigPath, .. arguments], TimeSpan.FromMinutes(2), cancellationToken);
 
-    private static Task<ProcessTextOutput> RunContainerCliAsync(string provider, IEnumerable<string> arguments, CancellationToken cancellationToken)
+    private static Task<ExternalProcessResult> RunContainerCliAsync(string provider, IEnumerable<string> arguments, CancellationToken cancellationToken)
         => RunExternalAsync(provider, arguments, TimeSpan.FromMinutes(5), cancellationToken);
 
-    private static async Task<ProcessTextOutput> RunExternalAsync(string executable, IEnumerable<string> arguments, TimeSpan timeoutDuration, CancellationToken cancellationToken)
+    private static async Task<ExternalProcessResult> RunExternalAsync(string executable, IEnumerable<string> arguments, TimeSpan timeoutDuration, CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo { FileName = executable, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
 
         using var timeout = new CancellationTokenSource(timeoutDuration);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        var result = await Process.RunAndCaptureTextAsync(startInfo, linked.Token);
-        result.ExitStatus.ExitCode.ShouldBe(0, result.StandardError);
+        var result = await RunExternalProcessAsync(startInfo, linked.Token);
+        result.ExitCode.ShouldBe(0, result.StandardError);
         return result;
+    }
+
+    private static async Task<ExternalProcessResult> RunExternalProcessAsync(ProcessStartInfo startInfo, CancellationToken cancellationToken)
+    {
+        using var process = new Process { StartInfo = startInfo };
+        if (!process.Start()) throw new InvalidOperationException($"Unable to start '{startInfo.FileName}'.");
+
+        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { }
+            catch (System.ComponentModel.Win32Exception) { }
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
+
+        return new ExternalProcessResult(process.ExitCode, await standardOutput, await standardError);
     }
 }

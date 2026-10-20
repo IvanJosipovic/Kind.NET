@@ -20,6 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CliWrap" Version="3.10.5" />
     <InternalsVisibleTo Include="Kind.NET.Tests" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="runtimes\**\native\*"

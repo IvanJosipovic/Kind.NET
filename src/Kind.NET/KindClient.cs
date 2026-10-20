@@ -1,4 +1,5 @@
-using System.Diagnostics;
+using CliWrap;
+using CliWrap.Buffered;
 
 namespace Kind.NET;
 
@@ -139,40 +140,37 @@ public sealed class KindClient
     private async Task<KindCommandResult> ExecuteCoreAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
         if (_executor is not null) return await _executor(arguments, cancellationToken).ConfigureAwait(false);
-        var startInfo = new ProcessStartInfo
+        var command = Cli.Wrap(_executable)
+            .WithArguments(arguments)
+            .WithWorkingDirectory(_options.WorkingDirectory ?? Environment.CurrentDirectory)
+            .WithValidation(CommandResultValidation.None);
+        if (_options.Environment is not null)
         {
-            FileName = _executable,
-            WorkingDirectory = _options.WorkingDirectory ?? Environment.CurrentDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
-        startInfo.InheritedHandles = [];
-        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux()) startInfo.KillOnParentExit = true;
-        if (_options.Environment is not null) foreach (var pair in _options.Environment) startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+            command = command.WithEnvironmentVariables(_options.Environment.ToDictionary(pair => pair.Key, pair => pair.Value));
+        }
 
         using var timeout = _options.CommandTimeout is null ? null : new CancellationTokenSource(_options.CommandTimeout.Value);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout?.Token ?? CancellationToken.None);
 
-        ProcessTextOutput output;
         try
         {
-            output = await Process.RunAndCaptureTextAsync(startInfo, linked.Token).ConfigureAwait(false);
+            var output = await command.ExecuteBufferedAsync(linked.Token).ConfigureAwait(false);
+            var result = new KindCommandResult(output.ExitCode, output.StandardOutput, output.StandardError);
+            if (result.ExitCode != 0) throw new KindCommandException($"Kind command failed with exit code {result.ExitCode}.", result.ExitCode, result.StandardOutput, result.StandardError);
+            return result;
         }
         catch (OperationCanceledException ex)
         {
             throw new KindCommandException("Kind command was cancelled or timed out.", null, null, null, ex);
         }
+        catch (KindCommandException)
+        {
+            throw;
+        }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or ArgumentException or UnauthorizedAccessException)
         {
             throw new KindCommandException($"Unable to start Kind executable '{_executable}'.", null, null, null, ex);
         }
-
-        var result = new KindCommandResult(output.ExitStatus.ExitCode, output.StandardOutput, output.StandardError);
-        if (result.ExitCode != 0) throw new KindCommandException($"Kind command failed with exit code {result.ExitCode}.", result.ExitCode, result.StandardOutput, result.StandardError);
-        return result;
     }
 
     private static List<string> GetKubeConfigArguments(string name, bool internalAddress)
