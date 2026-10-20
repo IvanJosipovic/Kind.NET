@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 namespace Kind.NET;
 
 /// <summary>Describes an operating-system and architecture-specific Kind executable.</summary>
+/// <param name="Rid">The runtime identifier for the platform.</param>
+/// <param name="FileName">The Kind executable file name for the platform.</param>
 public readonly record struct KindPlatform(string Rid, string FileName)
 {
     /// <summary>Gets the platform of the current process.</summary>

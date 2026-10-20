@@ -29,6 +29,14 @@ using Kind.NET;
 var kind = new KindClient();
 await kind.CreateClusterAsync(new KindClusterOptions(Name: "demo"));
 var kubeConfig = await kind.GetKubeConfigAsync("demo");
+var internalKubeConfig = await kind.GetInternalKubeConfigAsync("demo");
+var demoNodes = await kind.GetNodesAsync("demo");
+var allNodes = await kind.GetAllNodesAsync();
 await kind.DeleteClusterAsync(new KindDeleteClusterOptions("demo"));
 ```
+
+Cluster query methods without a name use Kind's default cluster (`kind`). Pass a
+cluster name to target a specific cluster. Methods that act across clusters,
+such as `GetAllNodesAsync`, have separate names so a cluster name is never
+silently ignored. Internal-address kubeconfig methods are also named explicitly.
 
