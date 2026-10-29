@@ -58,7 +58,7 @@ jobs:
         if: startsWith(matrix.rid, 'linux-')
         run: sudo apt-get update && sudo apt-get install --yes clang zlib1g-dev
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: native/kind-shim/go.mod
           cache-dependency-path: native/kind-shim/go.sum
@@ -129,7 +129,7 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: native/kind-shim/go.mod
           cache-dependency-path: native/kind-shim/go.sum
