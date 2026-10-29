@@ -39,6 +39,8 @@ type response struct {
 	Error string `json:"error,omitempty"`
 }
 
+var signalInitializationError = prepareSignalHandlers()
+
 func main() {}
 
 func handleJSON(input []byte) (output []byte) {
@@ -83,6 +85,9 @@ func newProvider(name string) (*cluster.Provider, error) {
 }
 
 func execute(r request) (any, error) {
+	if signalInitializationError != nil {
+		return nil, signalInitializationError
+	}
 	if r.Name == "" {
 		r.Name = cluster.DefaultName
 	}

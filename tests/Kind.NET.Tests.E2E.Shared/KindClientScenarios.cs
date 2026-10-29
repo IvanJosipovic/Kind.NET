@@ -49,7 +49,10 @@ public static class KindClientScenarios
             kind.ExportInternalKubeConfig(name, internalExported);
             Require(File.ReadAllText(exported).Contains("server:", StringComparison.Ordinal), "Kubeconfig export failed.");
             Require(File.ReadAllText(internalExported).Contains(name + "-control-plane", StringComparison.Ordinal), "Internal export failed.");
+            Console.WriteLine("Checking Kubernetes readiness through a managed child process.");
             Run("kubectl", "--kubeconfig", kubeconfig, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=180s");
+            NativeSignalChecks.RequireChildSignalAlternateStack();
+            Console.WriteLine("Exporting Kind logs after managed process initialization.");
             var logs = kind.ExportLogs(name, Path.Combine(root, "logs"));
             Require(Directory.EnumerateFiles(logs, "*", SearchOption.AllDirectories).Any(), "No logs were exported.");
 
@@ -58,6 +61,7 @@ public static class KindClientScenarios
             Directory.CreateDirectory(context);
             File.WriteAllText(Path.Combine(context, "Dockerfile"), "FROM busybox:1.37\nLABEL kind-net-test=true\n");
             Run("docker", "build", "-t", image, context);
+            Console.WriteLine("Loading Docker images and archives.");
             kind.LoadDockerImages(name, [image], [nodes[0]]);
             var archive = Path.Combine(root, "image.tar");
             Run("docker", "save", "-o", archive, image);
@@ -83,6 +87,7 @@ public static class KindClientScenarios
 
             if (string.Equals(Environment.GetEnvironmentVariable("KIND_TEST_BUILD_NODE_IMAGE"), "true", StringComparison.OrdinalIgnoreCase))
             {
+                Console.WriteLine("Building a release node image.");
                 kind.BuildNodeImage(new KindBuildNodeImageOptions("v1.37.0", Image: image, Type: "release"));
                 Run("docker", "image", "inspect", image);
             }
