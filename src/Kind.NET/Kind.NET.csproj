@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <PackageId>Kind.NET</PackageId>
@@ -14,22 +14,14 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
-    <KindVersion>v0.33.0</KindVersion>
-    <KindAssetRid>$(RuntimeIdentifier)</KindAssetRid>
-    <KindAssetRid Condition="'$(KindAssetRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</KindAssetRid>
+    <VerifyReferenceAotCompatibility>true</VerifyReferenceAotCompatibility>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CliWrap" Version="3.10.5" />
     <InternalsVisibleTo Include="Kind.NET.Tests" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <None Include="runtimes\**\native\*"
-          Pack="true"
-          PackagePath="runtimes/" />
-    <None Update="runtimes\$(KindAssetRid)\native\*"
-          Link="%(Identity)"
-          CopyToOutputDirectory="PreserveNewest"
-          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="runtimes/**/native/kindshim.dll" Pack="true" CopyToOutputDirectory="PreserveNewest" PackagePath="%(Identity)" />
+    <None Include="runtimes/**/native/libkindshim.so" Pack="true" CopyToOutputDirectory="PreserveNewest" PackagePath="%(Identity)" />
+    <None Include="runtimes/**/native/libkindshim.dylib" Pack="true" CopyToOutputDirectory="PreserveNewest" PackagePath="%(Identity)" />
   </ItemGroup>
-
 </Project>

@@ -1,0 +1,69 @@
+name: Go Shim Tests
+
+on:
+  workflow_call:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - native/kind-shim/**
+      - src/Kind.NET/**
+      - tests/Kind.NET.Tests.E2E.AOT/**
+      - tests/Kind.NET.Tests.E2E.Shared/**
+      - tests/Kind.NET.Tests.E2E/**
+      - tests/Kind.NET.Tests/**
+      - Kind.NET.slnx
+      - .github/workflows/go-test.yaml
+      - .github/workflows/aot-smoke.yaml
+      - .github/workflows/update-kind-native.yaml
+      - .github/workflows/release.yaml
+      - testconfig.json
+      - Directory.Build.props
+      - global.json
+
+jobs:
+  test:
+    name: Test Kind shim
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: native/kind-shim/go.mod
+          cache-dependency-path: native/kind-shim/go.sum
+      - name: Build native library for managed tests
+        working-directory: native/kind-shim
+        env:
+          CGO_ENABLED: 1
+        run: go build -buildmode=c-shared -trimpath -o ../../src/Kind.NET/runtimes/linux-x64/native/libkindshim.so .
+
+      - name: Run tests
+        working-directory: native/kind-shim
+        env:
+          CGO_ENABLED: 1
+          KIND_SHIM_TEST_CLUSTER: "true"
+        run: go test -coverprofile=coverage.txt ./...
+
+      - name: Upload Go coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: native/kind-shim/coverage.txt
+          flags: go
+          fail_ci_if_error: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: false
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Run managed Kind E2E scenarios
+        env:
+          KIND_TEST_CLUSTER: "true"
+          KIND_TEST_BUILD_NODE_IMAGE: "true"
+        run: dotnet test --project "${{ github.workspace }}/tests/Kind.NET.Tests.E2E/Kind.NET.Tests.E2E.csproj"
+
+  native-aot:
+    name: NativeAOT smoke tests
+    uses: ./.github/workflows/aot-smoke.yaml

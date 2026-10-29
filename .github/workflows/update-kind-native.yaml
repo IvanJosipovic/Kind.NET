@@ -1,0 +1,237 @@
+name: Update Kind Go Library
+
+on:
+  schedule:
+    - cron: '17 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to update and target with the pull request
+        required: true
+        default: main
+        type: string
+  push:
+    branches:
+      - main
+      - alpha
+      - beta
+    paths:
+      - native/kind-shim/**
+      - .github/workflows/update-kind-native.yaml
+
+concurrency:
+  group: update-kind-native-${{ inputs.target_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Update Kind dependency and test shim
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      kind-version: ${{ steps.versions.outputs.kind-version }}
+      go-version: ${{ steps.versions.outputs.go-version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_branch || github.ref_name }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: native/kind-shim/go.sum
+
+      - name: Update Kind to the latest stable Go module
+        working-directory: native/kind-shim
+        run: |
+          go get sigs.k8s.io/kind@latest
+          go mod tidy
+          go test -cover ./...
+
+      - name: Record versions
+        id: versions
+        working-directory: native/kind-shim
+        run: |
+          echo "kind-version=$(go list -m -f '{{.Version}}' sigs.k8s.io/kind)" >> "$GITHUB_OUTPUT"
+          echo "go-version=$(go env GOVERSION | sed 's/^go//')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kind-dependency-files
+          path: |
+            native/kind-shim/go.mod
+            native/kind-shim/go.sum
+          if-no-files-found: error
+          retention-days: 1
+
+  build-native:
+    name: Build ${{ matrix.rid }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            runner: windows-2025
+            goos: windows
+            goarch: amd64
+            output: kindshim.dll
+            cc: gcc
+            shell: msys2 {0}
+            msystem: UCRT64
+            msys-packages: mingw-w64-ucrt-x86_64-gcc
+          - rid: win-arm64
+            runner: windows-11-arm
+            goos: windows
+            goarch: arm64
+            output: kindshim.dll
+            cc: aarch64-w64-mingw32-clang
+            shell: msys2 {0}
+            msystem: CLANGARM64
+            msys-packages: mingw-w64-clang-aarch64-clang
+
+          - rid: linux-x64
+            runner: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+            output: libkindshim.so
+            cc: gcc
+            shell: bash
+          - rid: linux-arm64
+            runner: ubuntu-22.04-arm
+            goos: linux
+            goarch: arm64
+            output: libkindshim.so
+            cc: gcc
+            shell: bash
+
+          - rid: osx-x64
+            runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            output: libkindshim.dylib
+            cc: clang
+            shell: bash
+          - rid: osx-arm64
+            runner: macos-15
+            goos: darwin
+            goarch: arm64
+            output: libkindshim.dylib
+            cc: clang
+            shell: bash
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_branch || github.ref_name }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: kind-dependency-files
+          path: native/kind-shim
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ needs.prepare.outputs.go-version }}
+          cache-dependency-path: native/kind-shim/go.sum
+
+      - uses: msys2/setup-msys2@v2
+        if: startsWith(matrix.rid, 'win-')
+        with:
+          msystem: ${{ matrix.msystem }}
+          path-type: inherit
+          install: ${{ matrix.msys-packages }}
+
+      - name: Build and verify native library
+        working-directory: native/kind-shim
+        env:
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          RID: ${{ matrix.rid }}
+          LIBRARY_NAME: ${{ matrix.output }}
+        run: |
+          output="../../src/Kind.NET/runtimes/${RID}/native/${LIBRARY_NAME}"
+          header="${output%.*}.h"
+          mkdir -p "$(dirname "$output")"
+          go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "$output" .
+          test -s "$header"
+          grep -Fq 'KindExecuteJSON' "$header"
+          grep -Fq 'KindFree' "$header"
+          rm -f "$header"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.rid }}
+          path: src/Kind.NET/runtimes/${{ matrix.rid }}/native/${{ matrix.output }}
+          if-no-files-found: error
+          retention-days: 1
+
+  create-update-pr:
+    name: Open update pull request
+    needs:
+      - prepare
+      - build-native
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_branch || github.ref_name }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: kind-dependency-files
+          path: native/kind-shim
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: native-*
+          path: downloaded-native
+          merge-multiple: false
+
+      - name: Install six native libraries
+        env:
+          KIND_VERSION: ${{ needs.prepare.outputs.kind-version }}
+        run: |
+          set -euo pipefail
+          declare -A library_names=(
+            [win-x64]=kindshim.dll
+            [win-arm64]=kindshim.dll
+            [linux-x64]=libkindshim.so
+            [linux-arm64]=libkindshim.so
+            [osx-x64]=libkindshim.dylib
+            [osx-arm64]=libkindshim.dylib
+          )
+          for rid in "${!library_names[@]}"; do
+            artifact="downloaded-native/native-${rid}/${library_names[$rid]}"
+            test -s "$artifact"
+            destination="src/Kind.NET/runtimes/${rid}/native"
+            mkdir -p "$destination"
+            cp "$artifact" "$destination/"
+          done
+          echo "Prepared Kind ${KIND_VERSION} native libraries:"
+          du -h src/Kind.NET/runtimes/*/native/*kindshim*
+
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          base: ${{ inputs.target_branch || github.ref_name }}
+          branch: automation/update-kind-native
+          delete-branch: true
+          commit-message: "feat(kind): update Kind Go library to ${{ needs.prepare.outputs.kind-version }}"
+          title: "feat(kind): update Kind Go library to ${{ needs.prepare.outputs.kind-version }}"
+          body: |
+            Updates the pinned Kind Go module and rebuilds the native C-shared library for all supported runtime identifiers.
+
+            The workflow runs the Go shim tests and verifies the exported `KindExecuteJSON` and `KindFree` symbols before opening this pull request.
+          add-paths: |
+            native/kind-shim/go.mod
+            native/kind-shim/go.sum
+            src/Kind.NET/runtimes/*/native/*kindshim*

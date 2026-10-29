@@ -1,18 +1,10 @@
 namespace Kind.NET;
 
-/// <summary>Configures a <see cref="KindClient"/>.</summary>
+/// <summary>Configures the native Kind client.</summary>
 public sealed class KindClientOptions
 {
-    /// <summary>Gets the explicit Kind executable path.</summary>
-    public string? ExecutablePath { get; init; }
-    /// <summary>Gets whether the bundled executable is preferred.</summary>
-    public bool UseBundledExecutable { get; init; } = true;
-    /// <summary>Gets the command working directory.</summary>
-    public string? WorkingDirectory { get; init; }
-    /// <summary>Gets the command timeout.</summary>
-    public TimeSpan? CommandTimeout { get; init; }
-    /// <summary>Gets environment variables added to Kind processes.</summary>
-    public IReadOnlyDictionary<string, string?>? Environment { get; init; }
+    /// <summary>Gets the container provider: docker, podman, or nerdctl. When omitted, Kind selects the provider.</summary>
+    public string? Provider { get; init; }
 }
 
 /// <summary>Options for creating a Kind cluster.</summary>
@@ -48,28 +40,9 @@ public sealed record KindBuildNodeImageOptions(
     string? Type = null,
     string? Architecture = null);
 
-/// <summary>The result of a Kind command.</summary>
-/// <param name="ExitCode">The process exit code.</param>
-/// <param name="StandardOutput">The captured standard output.</param>
-/// <param name="StandardError">The captured standard error.</param>
-public sealed record KindCommandResult(int ExitCode, string StandardOutput, string StandardError);
-
-/// <summary>Represents a failed Kind command.</summary>
-public sealed class KindCommandException : Exception
+/// <summary>Represents a failed native Kind action.</summary>
+public sealed class KindActionException : Exception
 {
-    /// <summary>Initializes a command exception with captured process details.</summary>
-    /// <param name="message">The exception message.</param>
-    /// <param name="exitCode">The Kind process exit code, or <see langword="null"/> if the process did not exit normally.</param>
-    /// <param name="standardOutput">The captured standard output, if available.</param>
-    /// <param name="standardError">The captured standard error, if available.</param>
-    /// <param name="innerException">The exception that caused this exception, if any.</param>
-    public KindCommandException(string message, int? exitCode = null, string? standardOutput = null, string? standardError = null, Exception? innerException = null)
-        : base(message, innerException) => (ExitCode, StandardOutput, StandardError) = (exitCode, standardOutput, standardError);
-
-    /// <summary>Gets the process exit code.</summary>
-    public int? ExitCode { get; }
-    /// <summary>Gets captured standard output.</summary>
-    public string? StandardOutput { get; }
-    /// <summary>Gets captured standard error.</summary>
-    public string? StandardError { get; }
+    /// <summary>Initializes an exception with the native action error.</summary>
+    public KindActionException(string message) : base(message) { }
 }
