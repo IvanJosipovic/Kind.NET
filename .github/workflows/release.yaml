@@ -26,9 +26,13 @@ jobs:
     with:
       version: ${{ needs.get-version.outputs.new_release_version }}
 
+  native-tests:
+    name: Native tests
+    uses: ./.github/workflows/go-test.yaml
+
   create-release:
     name: Create Release
-    needs: build-test
+    needs: [build-test, native-tests]
     permissions:
       contents: write
       actions: write

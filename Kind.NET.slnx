@@ -7,4 +7,7 @@
   </Folder>
   <Project Path="tests/Kind.NET.Tests/Kind.NET.Tests.csproj" />
   <Project Path="src/Kind.NET/Kind.NET.csproj" />
+  <Project Path="tests/Kind.NET.Tests.E2E.Shared/Kind.NET.Tests.E2E.Shared.csproj" />
+  <Project Path="tests/Kind.NET.Tests.E2E/Kind.NET.Tests.E2E.csproj" />
+  <Project Path="tests/Kind.NET.Tests.E2E.AOT/Kind.NET.Tests.E2E.AOT.csproj" />
 </Solution>

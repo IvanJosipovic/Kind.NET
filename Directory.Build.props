@@ -11,5 +11,6 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
     <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --config-file $(MSBuildThisFileDirectory)testconfig.json</TestingPlatformCommandLineArguments>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 </Project>

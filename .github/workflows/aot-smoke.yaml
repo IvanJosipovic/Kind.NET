@@ -1,0 +1,157 @@
+name: NativeAOT Smoke Test
+
+on:
+  workflow_call:
+
+jobs:
+  native-aot:
+    name: NativeAOT ${{ matrix.framework }} ${{ matrix.rid }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        framework:
+          - net10.0
+          - net11.0
+        rid:
+          - win-x64
+          - win-arm64
+          - linux-x64
+          - linux-arm64
+          - osx-x64
+          - osx-arm64
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            executable_prefix: .\aot-publish-
+            executable_suffix: \Kind.NET.Tests.E2E.AOT.exe
+          - rid: win-arm64
+            runner: windows-11-arm
+            executable_prefix: .\aot-publish-
+            executable_suffix: \Kind.NET.Tests.E2E.AOT.exe
+          - rid: linux-x64
+            runner: ubuntu-latest
+            executable_prefix: ./aot-publish-
+            executable_suffix: /Kind.NET.Tests.E2E.AOT
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+            executable_prefix: ./aot-publish-
+            executable_suffix: /Kind.NET.Tests.E2E.AOT
+          - rid: osx-x64
+            runner: macos-26-intel
+            executable_prefix: ./aot-publish-
+            executable_suffix: /Kind.NET.Tests.E2E.AOT
+          - rid: osx-arm64
+            runner: macos-latest
+            executable_prefix: ./aot-publish-
+            executable_suffix: /Kind.NET.Tests.E2E.AOT
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: false
+
+      - name: Install NativeAOT prerequisites
+        if: startsWith(matrix.rid, 'linux-')
+        run: sudo apt-get update && sudo apt-get install --yes clang zlib1g-dev
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: native/kind-shim/go.mod
+          cache-dependency-path: native/kind-shim/go.sum
+
+      - uses: msys2/setup-msys2@v2
+        if: startsWith(matrix.rid, 'win-')
+        with:
+          msystem: ${{ matrix.rid == 'win-arm64' && 'CLANGARM64' || 'UCRT64' }}
+          path-type: inherit
+          install: ${{ matrix.rid == 'win-arm64' && 'mingw-w64-clang-aarch64-clang' || 'mingw-w64-ucrt-x86_64-gcc' }}
+
+      - name: Build native shim (Windows)
+        if: startsWith(matrix.rid, 'win-')
+        shell: msys2 {0}
+        working-directory: native/kind-shim
+        env:
+          CGO_ENABLED: 1
+          CC: ${{ matrix.rid == 'win-arm64' && 'aarch64-w64-mingw32-clang' || 'gcc' }}
+          RID: ${{ matrix.rid }}
+        run: go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "../../src/Kind.NET/runtimes/${RID}/native/kindshim.dll" .
+
+      - name: Build native shim (Unix)
+        if: ${{ !startsWith(matrix.rid, 'win-') }}
+        shell: bash
+        working-directory: native/kind-shim
+        env:
+          CGO_ENABLED: 1
+          RID: ${{ matrix.rid }}
+        run: |
+          library=libkindshim.so
+          if [[ "$RID" == osx-* ]]; then library=libkindshim.dylib; fi
+          go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "../../src/Kind.NET/runtimes/${RID}/native/${library}" .
+
+      - name: Publish NativeAOT smoke application
+        run: >-
+          dotnet publish tests/Kind.NET.Tests.E2E.AOT/Kind.NET.Tests.E2E.AOT.csproj
+          --configuration Release
+          --framework ${{ matrix.framework }}
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishAot=true
+          --output aot-publish-${{ matrix.framework }}
+
+      - name: Run NativeAOT smoke application
+        run: ${{ matrix.executable_prefix }}${{ matrix.framework }}${{ matrix.executable_suffix }}
+
+  native-aot-kubernetes:
+    name: NativeAOT Kind lifecycle ${{ matrix.framework }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        framework:
+          - net10.0
+          - net11.0
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: false
+
+      - name: Install NativeAOT prerequisites
+        run: sudo apt-get update && sudo apt-get install --yes clang zlib1g-dev
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: native/kind-shim/go.mod
+          cache-dependency-path: native/kind-shim/go.sum
+
+      - name: Build native shim
+        working-directory: native/kind-shim
+        env:
+          CGO_ENABLED: 1
+        run: go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o ../../src/Kind.NET/runtimes/linux-x64/native/libkindshim.so .
+
+      - name: Publish NativeAOT smoke application
+        run: >-
+          dotnet publish tests/Kind.NET.Tests.E2E.AOT/Kind.NET.Tests.E2E.AOT.csproj
+          --configuration Release
+          --framework ${{ matrix.framework }}
+          --runtime linux-x64
+          --self-contained true
+          -p:PublishAot=true
+          --output aot-kubernetes-publish-${{ matrix.framework }}
+
+      - name: Smoke test Kind client operations
+        run: ./aot-kubernetes-publish-${{ matrix.framework }}/Kind.NET.Tests.E2E.AOT
+        env:
+          KIND_TEST_CLUSTER: "true"
+          KIND_TEST_BUILD_NODE_IMAGE: "true"

@@ -348,3 +348,8 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# Generated cgo headers and native test publish output
+src/Kind.NET/runtimes/*/native/*kindshim.h
+aot-publish-*/
+aot-kubernetes-publish-*/
